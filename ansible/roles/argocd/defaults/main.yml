@@ -1,0 +1,24 @@
+---
+# GitOps deployment role defaults
+# These paths point to the rhoso-gitops repository structure
+# https://github.com/openstack-gitops/rhoso-gitops
+#
+# To use these defaults, set argocd_rhoso_gitops_path in your playbook or group_vars
+# Example: argocd_rhoso_gitops_path: /path/to/rhoso-gitops
+# Or override argocd_subscribe_path and argocd_enable_path directly
+
+# Base path to the rhoso-gitops repository (should be set externally)
+# This variable should be defined in your playbook or group_vars
+argocd_rhoso_gitops_path: "https://github.com/openstack-gitops/rhoso-gitops"
+
+# Git reference (branch, tag, or commit hash) to pin the repository version
+# Defaults to the latest commit hash from the main branch
+argocd_rhoso_gitops_ref: "4be135b7b648af88c297367ad8fe5f2b8040f9d7"
+
+# Path to the subscribe kustomize directory
+# Points to base/initialize/gitops/subscribe in the rhoso-gitops repository
+argocd_subscribe_path: "{{ argocd_rhoso_gitops_path }}/base/initialize/gitops/subscribe?ref={{ argocd_rhoso_gitops_ref }}"
+
+# Path to the enable kustomize directory  
+# Points to base/initialize/gitops/enable in the rhoso-gitops repository
+argocd_enable_path: "{{ argocd_rhoso_gitops_path }}/base/initialize/gitops/enable?ref={{ argocd_rhoso_gitops_ref }}"

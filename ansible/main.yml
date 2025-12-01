@@ -25,6 +25,7 @@
   environment: "{{ ocp_environment }}"
   roles:
     - bootstrap
+    - argocd
     - values-prep
     - values-prep-dp
     - lvms

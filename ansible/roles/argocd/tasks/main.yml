@@ -1,0 +1,64 @@
+---
+- name: Subscribe to Red Hat GitOps
+  ansible.builtin.shell: |
+    oc apply -k {{ argocd_subscribe_path }}
+  register: subscribe_result
+  changed_when: subscribe_result.rc == 0
+
+- name: Get status of Subscription before continuing
+  ansible.builtin.shell: |
+    oc get subscription openshift-gitops-operator -n openshift-gitops-operator -o jsonpath='{.status.state}' 2>/dev/null || echo ""
+  register: result_subscription
+  until: result_subscription.stdout | default("") == "AtLatestKnown"
+  retries: 12
+  delay: 10
+  failed_when: false
+
+- name: Fail when subscription is not available
+  ansible.builtin.fail:
+    msg: GitOps subscription is not available
+  when: >
+    (result_subscription.stdout is not defined) or
+    (result_subscription.stdout | default("") != "AtLatestKnown")
+
+- name: Get status of openshift-gitops Namespace creation
+  ansible.builtin.shell: |
+    oc get namespace openshift-gitops -o jsonpath='{.status.phase}' 2>/dev/null || echo ""
+  register: result_namespace
+  until: result_namespace.stdout | default("") == "Active"
+  retries: 12
+  delay: 10
+  failed_when: false
+
+- name: Fail when openshift-gitops namespace is not available
+  ansible.builtin.fail:
+    msg: Namespace for openshift-gitops is not available
+  when: >
+    (result_namespace.stdout is not defined) or
+    (result_namespace.stdout | default("") != "Active")
+
+- name: Enable GitOps deployment in preparation for RHOSO
+  ansible.builtin.shell: |
+    oc apply -k {{ argocd_enable_path }}
+  register: enable_result
+  changed_when: enable_result.rc == 0
+
+- name: Get status of ArgoCD deployment
+  ansible.builtin.shell: |
+    oc get argocd openshift-gitops -n openshift-gitops -o jsonpath='{.status.phase}' 2>/dev/null || echo ""
+  register: result_argocd
+  until: result_argocd.stdout | default("") == "Available"
+  retries: 12
+  delay: 10
+  failed_when: false
+
+- name: Get ArgoCD host
+  ansible.builtin.shell: |
+    oc get argocd openshift-gitops -n openshift-gitops -o jsonpath='{.status.host}' 2>/dev/null || echo ""
+  register: argocd_host
+  when: result_argocd.stdout | default("") == "Available"
+
+- name: Route to the ArgoCD interface
+  ansible.builtin.debug:
+    msg: Your ArgoCD interface is available at https://{{ argocd_host.stdout }}
+  when: argocd_host.stdout is defined
