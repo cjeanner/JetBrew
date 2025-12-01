@@ -62,3 +62,125 @@
   ansible.builtin.debug:
     msg: Your ArgoCD interface is available at https://{{ argocd_host.stdout }}
   when: argocd_host.stdout is defined
+
+- name: Gather facts for hostname and IP
+  ansible.builtin.setup:
+    gather_subset:
+      - network
+      - system
+
+- name: Set bastion host (prefer FQDN, fallback to default IPv4)
+  ansible.builtin.set_fact:
+    bastion_host: "{{ ansible_fqdn | default(ansible_default_ipv4.address, true) }}"
+
+- name: Check if ArgoCD SSH key exists
+  ansible.builtin.stat:
+    path: "{{ argocd_ssh_key_path }}"
+  register: argocd_ssh_key_check
+
+- name: Generate ED25519 SSH keypair for ArgoCD
+  ansible.builtin.command:
+    cmd: ssh-keygen -t ed25519 -N "" -f {{ argocd_ssh_key_path }} -C "argocd-repo-key"
+  when: not argocd_ssh_key_check.stat.exists
+  register: ssh_keygen_result
+  changed_when: ssh_keygen_result.rc == 0
+
+- name: Read ArgoCD SSH private key
+  ansible.builtin.slurp:
+    src: "{{ argocd_ssh_key_path }}"
+  register: argocd_ssh_private_key_content
+  when: argocd_ssh_key_check.stat.exists or ssh_keygen_result.rc == 0
+
+- name: Set ArgoCD SSH private key fact
+  ansible.builtin.set_fact:
+    argocd_ssh_private_key: "{{ argocd_ssh_private_key_content.content | b64decode }}"
+  when: argocd_ssh_private_key_content is defined
+
+- name: Scan SSH host keys from bastion host
+  ansible.builtin.command:
+    cmd: ssh-keyscan -H {{ bastion_host }}
+  register: ssh_keyscan_result
+  changed_when: false
+  failed_when: false
+
+- name: Set SSH known hosts fact
+  ansible.builtin.set_fact:
+    argocd_ssh_known_hosts: "{{ ssh_keyscan_result.stdout }}"
+  when: ssh_keyscan_result.rc == 0 and ssh_keyscan_result.stdout != ""
+
+- name: Validate required variables for ArgoCD repository configuration
+  ansible.builtin.assert:
+    that:
+      - argocd_ssh_private_key is defined
+      - argocd_ssh_private_key != ""
+      - bastion_host is defined
+      - bastion_host != ""
+      - dt_path is defined
+      - dt_path != ""
+      - argocd_ssh_known_hosts is defined
+      - argocd_ssh_known_hosts != ""
+    fail_msg: "Missing required variables for ArgoCD repository configuration. Ensure SSH key was generated, SSH host keys were scanned, and bastion_host/dt_path are set."
+    success_msg: "All required variables for ArgoCD repository configuration are present."
+
+- name: Write ArgoCD repository secret to file
+  vars:
+    content:
+      apiVersion: v1
+      kind: Secret
+      metadata:
+        name: "{{ argocd_repo_name | default('dt-architecture') }}"
+        namespace: openshift-gitops
+        labels:
+          argocd.argoproj.io/secret-type: repository
+      type: Opaque
+      stringData:
+        type: git
+        url: "ssh://root@{{ bastion_host }}{{ dt_path }}"
+        sshPrivateKey: "{{ argocd_ssh_private_key }}"
+        knownHosts: "{{ argocd_ssh_known_hosts }}"
+        project: default
+  ansible.builtin.copy:
+    content: "{{ content | to_nice_yaml }}"
+    dest: /tmp/argocd-repository-secret.yaml
+
+- name: Apply ArgoCD repository secret
+  ansible.builtin.command:
+    cmd: oc apply -f /tmp/argocd-repository-secret.yaml
+  register: repository_secret_apply
+  changed_when: repository_secret_apply.rc == 0
+
+- name: Read ArgoCD SSH public key
+  ansible.builtin.slurp:
+    src: "{{ argocd_ssh_key_path }}.pub"
+  register: argocd_ssh_public_key_content
+  when: argocd_ssh_key_check.stat.exists or ssh_keygen_result.rc == 0
+
+- name: Ensure .ssh directory exists
+  ansible.builtin.file:
+    path: /root/.ssh
+    state: directory
+    mode: '0700'
+    owner: root
+    group: root
+  become: yes
+  when: argocd_ssh_public_key_content is defined
+
+- name: Add ArgoCD SSH public key to root authorized_keys
+  ansible.builtin.lineinfile:
+    path: /root/.ssh/authorized_keys
+    line: "{{ argocd_ssh_public_key_content.content | b64decode }}"
+    create: yes
+    mode: '0600'
+    owner: root
+    group: root
+    regexp: "^{{ argocd_ssh_public_key_content.content | b64decode | regex_escape() }}$"
+  when: argocd_ssh_public_key_content is defined
+  become: yes
+  register: authorized_keys_result
+
+- name: Display ArgoCD SSH public key
+  ansible.builtin.debug:
+    msg: |
+      ArgoCD SSH public key has been added to /root/.ssh/authorized_keys:
+      {{ argocd_ssh_public_key_content.content | b64decode }}
+  when: argocd_ssh_public_key_content is defined
