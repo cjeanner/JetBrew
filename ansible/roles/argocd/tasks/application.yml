@@ -1,0 +1,97 @@
+---
+# Reusable task file for creating and managing ArgoCD applications
+# This file should be included with vars:
+#   argocd_app_name: name of the application
+#   argocd_app_path: path in the git repository (relative to repo root)
+#   argocd_app_namespace: target namespace (default: openstack)
+#   argocd_app_project: ArgoCD project (default: default)
+#   argocd_app_revision: git revision/branch (default: {{ cloud }})
+#   argocd_wait_timeout: timeout for waiting (default: 600)
+#   argocd_app_finalizers: list of finalizers (default: ['resources-finalizer.argocd.argoproj.io/foreground'])
+
+- name: Gather facts for hostname and IP (if not already set)
+  ansible.builtin.setup:
+    gather_subset:
+      - network
+      - system
+  when: bastion_host is not defined
+
+- name: Provide vars for subsequent tasks
+  vars:
+    _bastion_host: "{{ bastion_host | default(ansible_fqdn | default(ansible_default_ipv4.address, true), true) }}"
+    _argocd_app_dir: "{{ ansible_env.HOME }}/argocd"
+    _argocd_app_namespace: "{{ argocd_app_namespace | default('openstack') }}"
+    _argocd_app_project: "{{ argocd_app_project | default('default') }}"
+    _argocd_app_revision: "{{ argocd_app_revision | default(cloud) }}"
+    _argocd_wait_timeout: "{{ argocd_wait_timeout | default(600) }}"
+    _argocd_app_finalizers: "{{ argocd_app_finalizers | default(['resources-finalizer.argocd.argoproj.io/foreground']) }}"
+  block:
+    - name: Ensure ArgoCD application directory exists
+      ansible.builtin.file:
+        path: "{{ _argocd_app_dir }}"
+        state: directory
+        mode: '0755'
+
+    - name: Write ArgoCD Application CR to file
+      vars:
+        argocd_application:
+          apiVersion: argoproj.io/v1alpha1
+          kind: Application
+          metadata:
+            name: "{{ argocd_app_name }}"
+            namespace: openshift-gitops
+            finalizers: "{{ _argocd_app_finalizers }}"
+          spec:
+            project: "{{ _argocd_app_project }}"
+            source:
+              repoURL: "ssh://root@{{ _bastion_host }}{{ dt_path }}"
+              targetRevision: "{{ _argocd_app_revision }}"
+              path: "{{ argocd_app_path }}"
+            destination:
+              server: https://kubernetes.default.svc
+              namespace: "{{ _argocd_app_namespace }}"
+            syncPolicy:
+              automated:
+                prune: true
+                selfHeal: true
+              syncOptions:
+                - CreateNamespace=true
+      ansible.builtin.copy:
+        content: "{{ argocd_application | to_nice_yaml }}"
+        dest: "{{ _argocd_app_dir }}/{{ argocd_app_name }}.yaml"
+      register: argocd_app_file
+
+    - name: Apply ArgoCD Application
+      ansible.builtin.command:
+        cmd: oc apply -f "{{ _argocd_app_dir }}/{{ argocd_app_name }}.yaml"
+      register: argocd_app_apply
+      changed_when: argocd_app_apply.rc == 0
+
+    - name: Wait for ArgoCD Application to be synced
+      ansible.builtin.command:
+        cmd: oc wait application {{ argocd_app_name }} -n openshift-gitops --for jsonpath='{.status.sync.status}'=Synced --timeout={{ _argocd_wait_timeout }}s
+      register: argocd_app_sync
+      until: argocd_app_sync.rc == 0
+      retries: "{{ (_argocd_wait_timeout | int) / 10 }}"
+      delay: 10
+      failed_when: false
+
+    - name: Wait for ArgoCD Application to be healthy
+      ansible.builtin.command:
+        cmd: oc wait application {{ argocd_app_name }} -n openshift-gitops --for jsonpath='{.status.health.status}'=Healthy --timeout={{ _argocd_wait_timeout }}s
+      register: argocd_app_health
+      until: argocd_app_health.rc == 0
+      retries: "{{ (_argocd_wait_timeout | int) / 10 }}"
+      delay: 10
+      failed_when: false
+
+    - name: Fail if ArgoCD Application is not synced
+      ansible.builtin.fail:
+        msg: "ArgoCD Application {{ argocd_app_name }} failed to sync within {{ _argocd_wait_timeout }}s"
+      when: argocd_app_sync.rc != 0
+
+    - name: Fail if ArgoCD Application is not healthy
+      ansible.builtin.fail:
+        msg: "ArgoCD Application {{ argocd_app_name }} is not healthy"
+      when: argocd_app_health.rc != 0
+

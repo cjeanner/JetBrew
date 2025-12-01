@@ -1,20 +1,27 @@
 ---
-- name: apply nncp CRs
-  shell: |
-    kustomize build {{ dt_path }}/examples/dt/perfscale/scalelab/networking/nncp/. | tee nncp.yml | oc apply -f -
+- name: Create ArgoCD application for NNCP
+  include_role:
+    name: argocd
+    tasks_from: application
+  vars:
+    argocd_app_name: nncp
+    argocd_app_path: examples/dt/perfscale/scalelab/networking/nncp
+    argocd_wait_timeout: 300
 
-- name: wait for NNCPs to be available
-  shell:
-    oc wait nncp -l osp/nncm-config-type=standard --for jsonpath='{.status.conditions[0].reason}'=SuccessfullyConfigured --timeout=300s
+- name: Create ArgoCD application for network CRs
+  include_role:
+    name: argocd
+    tasks_from: application
+  vars:
+    argocd_app_name: network
+    argocd_app_path: examples/dt/perfscale/scalelab/networking
+    argocd_wait_timeout: 300
 
-- name: apply remaining network CRs
-  shell: |
-    kustomize build {{ dt_path }}/examples/dt/perfscale/scalelab/networking/. | tee network.yml | oc apply -f -
-
-- name: apply controlplane CRs
-  shell: |
-    kustomize build {{ dt_path }}/examples/dt/perfscale/scalelab/. | tee cp.yml | oc apply -f -
-
-- name: wait for control plane to be available
-  shell: |
-    oc wait osctlplane controlplane -n openstack --for condition=Ready --timeout=600s
+- name: Create ArgoCD application for controlplane
+  include_role:
+    name: argocd
+    tasks_from: application
+  vars:
+    argocd_app_name: controlplane
+    argocd_app_path: examples/dt/perfscale/scalelab
+    argocd_wait_timeout: 600

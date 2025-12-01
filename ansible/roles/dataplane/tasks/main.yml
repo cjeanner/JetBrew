@@ -1,24 +1,21 @@
 ---
-- name: Apply nodeset template
-  shell: |
-    kustomize build {{ dt_path }}/examples/dt/perfscale/scalelab/edpm/nodeset/. | tee nodeset.yml | oc apply -f -
+- name: Create ArgoCD application for nodeset
+  include_role:
+    name: argocd
+    tasks_from: application
+  vars:
+    argocd_app_name: edpm-nodeset
+    argocd_app_path: examples/dt/perfscale/scalelab/edpm/nodeset
+    argocd_wait_timeout: 600
 
-- name: wait for nodeset
-  shell: |
-    oc wait osdpns openstack-edpm -n openstack --for condition=SetupReady --timeout=600s
-
-- name: Apply deployment template
-  shell: |
-    kustomize build {{ dt_path }}/examples/dt/perfscale/scalelab/edpm/deployment/. | tee deployment.yml | oc apply -f -
-
-- name: Wait for dataplane deployment to finish
-  ansible.builtin.shell: |
-    until oc wait osdpd edpm-deployment -n openstack --for condition=Ready --timeout=60s 2>/dev/null; do
-      echo "Waiting for dataplane deployment to be ready..."
-      sleep 60
-    done
-  async: 7200
-  poll: 60
+- name: Create ArgoCD application for dataplane deployment
+  include_role:
+    name: argocd
+    tasks_from: application
+  vars:
+    argocd_app_name: edpm-deployment
+    argocd_app_path: examples/dt/perfscale/scalelab/edpm/deployment
+    argocd_wait_timeout: 2400
 
 - name: Run nova-manage cell_v2 discover_hosts
   shell: |
