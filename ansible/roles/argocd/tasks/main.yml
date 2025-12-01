@@ -1,13 +1,13 @@
 ---
 - name: Subscribe to Red Hat GitOps
-  ansible.builtin.shell: |
-    oc apply -k {{ argocd_subscribe_path }}
+  ansible.builtin.shell:
+    cmd: oc apply -k {{ argocd_subscribe_path }}
   register: subscribe_result
   changed_when: subscribe_result.rc == 0
 
 - name: Get status of Subscription before continuing
-  ansible.builtin.shell: |
-    oc get subscription openshift-gitops-operator -n openshift-gitops-operator -o jsonpath='{.status.state}' 2>/dev/null || echo ""
+  ansible.builtin.shell:
+    cmd: oc get subscription openshift-gitops-operator -n openshift-gitops-operator -o jsonpath='{.status.state}' 2>/dev/null || echo ""
   register: result_subscription
   until: result_subscription.stdout | default("") == "AtLatestKnown"
   retries: 12
@@ -22,8 +22,8 @@
     (result_subscription.stdout | default("") != "AtLatestKnown")
 
 - name: Get status of openshift-gitops Namespace creation
-  ansible.builtin.shell: |
-    oc get namespace openshift-gitops -o jsonpath='{.status.phase}' 2>/dev/null || echo ""
+  ansible.builtin.shell:
+    cmd: oc get namespace openshift-gitops -o jsonpath='{.status.phase}' 2>/dev/null || echo ""
   register: result_namespace
   until: result_namespace.stdout | default("") == "Active"
   retries: 12
@@ -38,14 +38,14 @@
     (result_namespace.stdout | default("") != "Active")
 
 - name: Enable GitOps deployment in preparation for RHOSO
-  ansible.builtin.shell: |
-    oc apply -k {{ argocd_enable_path }}
+  ansible.builtin.shell:
+    cmd: oc apply -k {{ argocd_enable_path }}
   register: enable_result
   changed_when: enable_result.rc == 0
 
 - name: Get status of ArgoCD deployment
-  ansible.builtin.shell: |
-    oc get argocd openshift-gitops -n openshift-gitops -o jsonpath='{.status.phase}' 2>/dev/null || echo ""
+  ansible.builtin.shell:
+    cmd: oc get argocd openshift-gitops -n openshift-gitops -o jsonpath='{.status.phase}' 2>/dev/null || echo ""
   register: result_argocd
   until: result_argocd.stdout | default("") == "Available"
   retries: 12
@@ -53,10 +53,36 @@
   failed_when: false
 
 - name: Get ArgoCD host
-  ansible.builtin.shell: |
-    oc get argocd openshift-gitops -n openshift-gitops -o jsonpath='{.status.host}' 2>/dev/null || echo ""
+  ansible.builtin.shell:
+    cmd: oc get argocd openshift-gitops -n openshift-gitops -o jsonpath='{.status.host}' 2>/dev/null || echo ""
   register: argocd_host
   when: result_argocd.stdout | default("") == "Available"
+
+- name: Install ArgoCD CLI
+  ansible.builtin.shell:
+    cmd: >-
+      curl -sSL -o /tmp/argocd-linux-amd64 https://github.com/argoproj/argo-cd/releases/latest/download/argocd-linux-amd64 &&
+      install -m 555 /tmp/argocd-linux-amd64 /usr/local/bin/argocd &&
+      rm /tmp/argocd-linux-amd64
+  become: yes
+  when: argocd_host.stdout is defined
+
+- name: Get ArgoCD admin password
+  ansible.builtin.shell:
+    cmd: >-
+      oc get secret openshift-gitops-cluster -n openshift-gitops -o jsonpath='{.data.admin\.password}' |
+      base64 -d
+  register: argocd_admin_password
+  when: argocd_host.stdout is defined
+  no_log: true
+
+- name: Authenticate ArgoCD CLI
+  ansible.builtin.command:
+    cmd: argocd login --username admin --password {{ argocd_admin_password.stdout }} {{ argocd_host.stdout }} --skip-test-tls --insecure
+  when: argocd_host.stdout is defined and argocd_admin_password.stdout is defined
+  register: argocd_login
+  changed_when: argocd_login.rc == 0
+  failed_when: argocd_login.rc != 0
 
 - name: Route to the ArgoCD interface
   ansible.builtin.debug:
