@@ -83,3 +83,9 @@
   ansible.builtin.template:
     src: lvms-values.yaml.j2
     dest: "{{ dt_path }}/examples/dt/perfscale/scalelab/lvms/lvm-cluster/values.yaml"
+
+- name: Commit generated configuration files to git
+  include_role:
+    name: git-commit
+  vars:
+    git_commit_message: "Add generated configuration files for {{ cloud }} controlplane"

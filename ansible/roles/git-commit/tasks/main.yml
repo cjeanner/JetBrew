@@ -1,0 +1,48 @@
+---
+- name: Check if branch {{ cloud }} exists
+  ansible.builtin.command:
+    cmd: git show-ref --verify --quiet refs/heads/{{ cloud }}
+    chdir: "{{ dt_path }}"
+  register: branch_exists
+  failed_when: false
+  changed_when: false
+
+- name: Create new branch {{ cloud }}
+  ansible.builtin.command:
+    cmd: git switch -c {{ cloud }}
+    chdir: "{{ dt_path }}"
+  register: branch_create
+  when: branch_exists.rc != 0
+  changed_when: branch_create.rc == 0
+
+- name: Checkout existing branch {{ cloud }}
+  ansible.builtin.command:
+    cmd: git switch {{ cloud }}
+    chdir: "{{ dt_path }}"
+  register: branch_checkout
+  when: branch_exists.rc == 0
+  changed_when: branch_checkout.rc == 0
+
+- name: Add all generated files to git
+  ansible.builtin.command:
+    cmd: git add .
+    chdir: "{{ dt_path }}"
+  register: git_add
+  changed_when: git_add.rc == 0
+
+- name: Check if there are changes to commit
+  ansible.builtin.command:
+    cmd: git diff --cached --quiet
+    chdir: "{{ dt_path }}"
+  register: git_diff_check
+  failed_when: false
+  changed_when: false
+
+- name: Commit generated configuration files
+  ansible.builtin.command:
+    cmd: git commit -m "{{ git_commit_message }}"
+    chdir: "{{ dt_path }}"
+  register: git_commit
+  when: git_diff_check.rc != 0
+  changed_when: git_commit.rc == 0
+

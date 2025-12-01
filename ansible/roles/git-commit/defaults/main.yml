@@ -1,0 +1,6 @@
+---
+# Git commit role defaults
+# This role handles git operations: branch creation/checkout, add, and commit
+
+# Commit message template - should be overridden by calling role
+git_commit_message: "Add generated configuration files for {{ cloud }}"

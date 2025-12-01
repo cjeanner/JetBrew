@@ -17,6 +17,12 @@
     version: bm-ocp
     force: true
 
+- name: Configure git user name and email
+  ansible.builtin.shell:
+    cmd: |
+      git config --global user.name "JetBrew Automation" &&
+      git config --global user.email "jetbrew-automation@redhatcom"
+
 - name: Download kustomize library
   ansible.builtin.shell:
     cmd: curl -s "https://raw.githubusercontent.com/kubernetes-sigs/kustomize/master/hack/install_kustomize.sh" | bash

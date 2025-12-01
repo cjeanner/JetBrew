@@ -130,6 +130,12 @@
     src: kustomization.yaml.j2
     dest: "{{ dt_path }}/examples/dt/perfscale/scalelab/edpm/nodeset/kustomization.yaml"
 
+- name: Commit generated configuration files to git
+  include_role:
+    name: git-commit
+  vars:
+    git_commit_message: "Add generated configuration files for {{ cloud }} dataplane"
+
 - name: node names
   debug:
     msg: "{{ edpm_nodes }}"
