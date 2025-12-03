@@ -60,4 +60,8 @@
       retries: 5
       delay: 5
       until: observability_wait.rc == 0
+<<<<<<< HEAD
   when: telemetry | default(true)
+=======
+  when: telemetry | default(true)
+>>>>>>> be38d73 (Refactor bootstrap role to align with Ansible best practices)
