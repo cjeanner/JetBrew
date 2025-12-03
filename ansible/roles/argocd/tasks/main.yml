@@ -117,14 +117,9 @@
   register: argocd_ssh_private_key_content
   when: argocd_ssh_key_check.stat.exists or ssh_keygen_result.rc == 0
 
-- name: Set ArgoCD SSH private key fact
-  ansible.builtin.set_fact:
-    argocd_ssh_private_key: "{{ argocd_ssh_private_key_content.content | b64decode }}"
-  when: argocd_ssh_private_key_content is defined
-
 - name: Scan SSH host keys from bastion host
   ansible.builtin.command:
-    cmd: ssh-keyscan -H {{ bastion_host }}
+    cmd: ssh-keyscan {{ bastion_host }}
   register: ssh_keyscan_result
   changed_when: false
   failed_when: false
@@ -137,8 +132,8 @@
 - name: Validate required variables for ArgoCD repository configuration
   ansible.builtin.assert:
     that:
-      - argocd_ssh_private_key is defined
-      - argocd_ssh_private_key != ""
+      - argocd_ssh_private_key_content is defined
+      - argocd_ssh_private_key_content.content != ""
       - bastion_host is defined
       - bastion_host != ""
       - dt_path is defined
@@ -159,12 +154,12 @@
         labels:
           argocd.argoproj.io/secret-type: repository
       type: Opaque
-      stringData:
-        type: git
-        url: "ssh://root@{{ bastion_host }}{{ dt_path }}"
-        sshPrivateKey: "{{ argocd_ssh_private_key }}"
-        knownHosts: "{{ argocd_ssh_known_hosts }}"
-        project: default
+      data:
+        type: "{{ 'git' | b64encode }}"
+        url: "{{ ('ssh://root@' + bastion_host + dt_path) | b64encode }}"
+        sshPrivateKey: "{{ argocd_ssh_private_key_content.content }}"
+        knownHosts: "{{ argocd_ssh_known_hosts | b64encode }}"
+        project: "{{ 'default' | b64encode }}"
   ansible.builtin.copy:
     content: "{{ content | to_nice_yaml }}"
     dest: /tmp/argocd-repository-secret.yaml
