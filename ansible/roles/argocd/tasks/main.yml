@@ -60,11 +60,12 @@
 
 - name: Install ArgoCD CLI
   ansible.builtin.shell:
+    creates: /usr/bin/argocd
     cmd: >-
       curl -sSL -o /tmp/argocd-linux-amd64 https://github.com/argoproj/argo-cd/releases/latest/download/argocd-linux-amd64 &&
-      install -m 555 /tmp/argocd-linux-amd64 /usr/local/bin/argocd &&
+      install -m 555 /tmp/argocd-linux-amd64 /usr/bin/argocd &&
       rm /tmp/argocd-linux-amd64
-  become: yes
+  become: true
   when: argocd_host.stdout is defined
 
 - name: Get ArgoCD admin password
@@ -119,7 +120,7 @@
 
 - name: Scan SSH host keys from bastion host
   ansible.builtin.command:
-    cmd: ssh-keyscan {{ bastion_host }}
+    cmd: ssh-keyscan -t rsa,ecdsa,ed25519 {{ bastion_host }}
   register: ssh_keyscan_result
   changed_when: false
   failed_when: false
@@ -143,6 +144,35 @@
     fail_msg: "Missing required variables for ArgoCD repository configuration. Ensure SSH key was generated, SSH host keys were scanned, and bastion_host/dt_path are set."
     success_msg: "All required variables for ArgoCD repository configuration are present."
 
+- name: Ensure ArgoCD application directory exists
+  ansible.builtin.file:
+    path: "{{ ansible_env.HOME }}/argocd"
+    state: directory
+    mode: '0755'
+
+- name: Write ArgoCD SSH known hosts ConfigMap to file
+  vars:
+    content:
+      apiVersion: v1
+      kind: ConfigMap
+      metadata:
+        name: argocd-ssh-known-hosts-cm
+        namespace: openshift-gitops
+        labels:
+          app.kubernetes.io/name: argocd-cm
+          app.kubernetes.io/part-of: argocd
+      data:
+        ssh_known_hosts: "{{ argocd_ssh_known_hosts }}"
+  ansible.builtin.copy:
+    content: "{{ content | to_nice_yaml }}"
+    dest: "{{ ansible_env.HOME }}/argocd/argocd-ssh-known-hosts-cm.yaml"
+
+- name: Apply ArgoCD SSH known hosts ConfigMap
+  ansible.builtin.command:
+    cmd: oc apply -f "{{ ansible_env.HOME }}/argocd/argocd-ssh-known-hosts-cm.yaml"
+  register: ssh_known_hosts_apply
+  changed_when: ssh_known_hosts_apply.rc == 0
+
 - name: Write ArgoCD repository secret to file
   vars:
     content:
@@ -158,15 +188,14 @@
         type: "{{ 'git' | b64encode }}"
         url: "{{ ('ssh://root@' + bastion_host + dt_path) | b64encode }}"
         sshPrivateKey: "{{ argocd_ssh_private_key_content.content }}"
-        knownHosts: "{{ argocd_ssh_known_hosts | b64encode }}"
         project: "{{ 'default' | b64encode }}"
   ansible.builtin.copy:
     content: "{{ content | to_nice_yaml }}"
-    dest: /tmp/argocd-repository-secret.yaml
+    dest: "{{ ansible_env.HOME }}/argocd/argocd-repository-secret.yaml"
 
 - name: Apply ArgoCD repository secret
   ansible.builtin.command:
-    cmd: oc apply -f /tmp/argocd-repository-secret.yaml
+    cmd: oc apply -f "{{ ansible_env.HOME }}/argocd/argocd-repository-secret.yaml"
   register: repository_secret_apply
   changed_when: repository_secret_apply.rc == 0
 
