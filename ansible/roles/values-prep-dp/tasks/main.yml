@@ -87,7 +87,6 @@
     -o UserKnownHostsFile=/dev/null
     {{ ssh_username }}@{{ item }}
   loop: "{{ edpm_nodes }}"
-  no_log: true
 
 - name: read the private key
   slurp:

@@ -48,3 +48,11 @@
     name: "{{ node.hostname }}"
   become: yes
   delegate_to: "{{ node.fqdn }}"
+
+- name: Copy ssh key to each node
+  shell: >
+    sshpass -p "{{ ssh_password }}" ssh-copy-id
+    -i {{ ssh_key_file }}.pub
+    -o StrictHostKeyChecking=no
+    -o UserKnownHostsFile=/dev/null
+    {{ ssh_username }}@{{ node.fqdn }}
