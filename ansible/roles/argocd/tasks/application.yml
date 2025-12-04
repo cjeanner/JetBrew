@@ -26,13 +26,13 @@
     _argocd_wait_timeout: "{{ argocd_wait_timeout | default(600) }}"
     _argocd_app_finalizers: "{{ argocd_app_finalizers | default(['resources-finalizer.argocd.argoproj.io/foreground']) }}"
   block:
-    - name: Ensure ArgoCD application directory exists
+    - name: "Ensure ArgoCD application directory exists for {{ argocd_app_name }}"
       ansible.builtin.file:
         path: "{{ _argocd_app_dir }}"
         state: directory
         mode: '0755'
 
-    - name: Write ArgoCD Application CR to file
+    - name: "Write ArgoCD Application CR to file for {{ argocd_app_name }}"
       vars:
         argocd_application:
           apiVersion: argoproj.io/v1alpha1
@@ -64,13 +64,13 @@
         dest: "{{ _argocd_app_dir }}/{{ argocd_app_name }}.yaml"
       register: argocd_app_file
 
-    - name: Apply ArgoCD Application
+    - name: "Apply ArgoCD Application {{ argocd_app_name }}"
       ansible.builtin.command:
         cmd: oc apply -f "{{ _argocd_app_dir }}/{{ argocd_app_name }}.yaml"
       register: argocd_app_apply
       changed_when: argocd_app_apply.rc == 0
 
-    - name: Wait for ArgoCD Application to be synced
+    - name: "Wait for ArgoCD Application {{ argocd_app_name }} to be synced (timeout: {{ _argocd_wait_timeout }}s)"
       ansible.builtin.command:
         cmd: oc wait application {{ argocd_app_name }} -n openshift-gitops --for jsonpath='{.status.sync.status}'=Synced --timeout={{ _argocd_wait_timeout }}s
       register: argocd_app_sync
@@ -79,7 +79,7 @@
       delay: 10
       failed_when: false
 
-    - name: Wait for ArgoCD Application to be healthy
+    - name: "Wait for ArgoCD Application {{ argocd_app_name }} to be healthy (timeout: {{ _argocd_wait_timeout }}s)"
       ansible.builtin.command:
         cmd: oc wait application {{ argocd_app_name }} -n openshift-gitops --for jsonpath='{.status.health.status}'=Healthy --timeout={{ _argocd_wait_timeout }}s
       register: argocd_app_health
@@ -88,13 +88,13 @@
       delay: 10
       failed_when: false
 
-    - name: Fail if ArgoCD Application is not synced
+    - name: "Fail if ArgoCD Application {{ argocd_app_name }} is not synced"
       ansible.builtin.fail:
         msg: "ArgoCD Application {{ argocd_app_name }} failed to sync within {{ _argocd_wait_timeout }}s"
       when: argocd_app_sync.rc != 0
 
-    - name: Fail if ArgoCD Application is not healthy
+    - name: "Fail if ArgoCD Application {{ argocd_app_name }} is not healthy"
       ansible.builtin.fail:
-        msg: "ArgoCD Application {{ argocd_app_name }} is not healthy"
+        msg: "ArgoCD Application {{ argocd_app_name }} is not healthy within {{ _argocd_wait_timeout }}s"
       when: argocd_app_health.rc != 0
 
