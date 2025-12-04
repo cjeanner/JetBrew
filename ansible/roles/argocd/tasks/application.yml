@@ -75,7 +75,7 @@
         cmd: oc wait application {{ argocd_app_name }} -n openshift-gitops --for jsonpath='{.status.sync.status}'=Synced --timeout={{ _argocd_wait_timeout }}s
       register: argocd_app_sync
       until: argocd_app_sync.rc == 0
-      retries: "{{ (_argocd_wait_timeout | int) / 10 }}"
+      retries: "{{ ((_argocd_wait_timeout | int) / 10) | int }}"
       delay: 10
       failed_when: false
 
@@ -84,7 +84,7 @@
         cmd: oc wait application {{ argocd_app_name }} -n openshift-gitops --for jsonpath='{.status.health.status}'=Healthy --timeout={{ _argocd_wait_timeout }}s
       register: argocd_app_health
       until: argocd_app_health.rc == 0
-      retries: "{{ (_argocd_wait_timeout | int) / 10 }}"
+      retries: "{{ ((_argocd_wait_timeout | int) / 10) | int }}"
       delay: 10
       failed_when: false
 
