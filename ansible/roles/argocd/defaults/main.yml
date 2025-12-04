@@ -25,6 +25,6 @@ argocd_enable_path: "{{ argocd_rhoso_gitops_path }}/base/initialize/gitops/enabl
 
 # ArgoCD repository configuration
 # SSH key path for ArgoCD repository access
-argocd_ssh_key_path: "{{ ansible_env.HOME }}/.ssh/argocd_ed25519"
+argocd_ssh_key_path: "{{ ansible_user_dir | default('~') }}/.ssh/argocd_ed25519"
 # Repository name in ArgoCD
 argocd_repo_name: "dt-architecture"

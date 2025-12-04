@@ -95,6 +95,7 @@
     gather_subset:
       - network
       - system
+      - user
 
 - name: Set bastion host (prefer FQDN, fallback to default IPv4)
   ansible.builtin.set_fact:
@@ -146,7 +147,7 @@
 
 - name: Ensure ArgoCD application directory exists
   ansible.builtin.file:
-    path: "{{ ansible_env.HOME }}/argocd"
+    path: "{{ ansible_user_dir }}/argocd"
     state: directory
     mode: '0755'
 
@@ -165,11 +166,11 @@
         ssh_known_hosts: "{{ argocd_ssh_known_hosts }}"
   ansible.builtin.copy:
     content: "{{ content | to_nice_yaml }}"
-    dest: "{{ ansible_env.HOME }}/argocd/argocd-ssh-known-hosts-cm.yaml"
+    dest: "{{ ansible_user_dir }}/argocd/argocd-ssh-known-hosts-cm.yaml"
 
 - name: Apply ArgoCD SSH known hosts ConfigMap
   ansible.builtin.command:
-    cmd: oc apply -f "{{ ansible_env.HOME }}/argocd/argocd-ssh-known-hosts-cm.yaml"
+    cmd: oc apply -f "{{ ansible_user_dir }}/argocd/argocd-ssh-known-hosts-cm.yaml"
   register: ssh_known_hosts_apply
   changed_when: ssh_known_hosts_apply.rc == 0
 
@@ -186,16 +187,16 @@
       type: Opaque
       data:
         type: "{{ 'git' | b64encode }}"
-        url: "{{ ('ssh://root@' + bastion_host + dt_path) | b64encode }}"
+        url: "{{ ('ssh://' + ansible_user_id + '@' + bastion_host + dt_path) | b64encode }}"
         sshPrivateKey: "{{ argocd_ssh_private_key_content.content }}"
         project: "{{ 'default' | b64encode }}"
   ansible.builtin.copy:
     content: "{{ content | to_nice_yaml }}"
-    dest: "{{ ansible_env.HOME }}/argocd/argocd-repository-secret.yaml"
+    dest: "{{ ansible_user_dir }}/argocd/argocd-repository-secret.yaml"
 
 - name: Apply ArgoCD repository secret
   ansible.builtin.command:
-    cmd: oc apply -f "{{ ansible_env.HOME }}/argocd/argocd-repository-secret.yaml"
+    cmd: oc apply -f "{{ ansible_user_dir }}/argocd/argocd-repository-secret.yaml"
   register: repository_secret_apply
   changed_when: repository_secret_apply.rc == 0
 

@@ -14,12 +14,14 @@
     gather_subset:
       - network
       - system
+      - user
   when: bastion_host is not defined
 
 - name: Provide vars for subsequent tasks
   vars:
     _bastion_host: "{{ bastion_host | default(ansible_fqdn | default(ansible_default_ipv4.address, true), true) }}"
-    _argocd_app_dir: "{{ ansible_env.HOME }}/argocd"
+    _argocd_app_dir: "{{ ansible_user_dir }}/argocd"
+    _argocd_app_user: "{{ ansible_user_id }}"
     _argocd_app_namespace: "{{ argocd_app_namespace | default('openstack') }}"
     _argocd_app_project: "{{ argocd_app_project | default('default') }}"
     _argocd_app_revision: "{{ argocd_app_revision | default(cloud) }}"
@@ -44,7 +46,7 @@
           spec:
             project: "{{ _argocd_app_project }}"
             source:
-              repoURL: "ssh://root@{{ _bastion_host }}{{ dt_path }}"
+              repoURL: "ssh://{{ _argocd_app_user }}@{{ _bastion_host }}{{ dt_path }}"
               targetRevision: "{{ _argocd_app_revision }}"
               path: "{{ argocd_app_path }}"
               kustomize:
