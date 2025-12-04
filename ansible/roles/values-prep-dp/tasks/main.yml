@@ -71,6 +71,7 @@
   include_tasks: prep-edpm-nodes.yml
   vars:
     node: "{{ item }}"
+  tags: never
   loop: "{{ edpm_node_list }}"
 
 - name: clear know_host file
