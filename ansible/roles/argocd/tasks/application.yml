@@ -47,6 +47,9 @@
               repoURL: "ssh://root@{{ _bastion_host }}{{ dt_path }}"
               targetRevision: "{{ _argocd_app_revision }}"
               path: "{{ argocd_app_path }}"
+              kustomize:
+                components:
+                  - https://github.com/openstack-gitops/rhoso-gitops/components/argocd/annotations
             destination:
               server: https://kubernetes.default.svc
               namespace: "{{ _argocd_app_namespace }}"
