@@ -51,7 +51,7 @@
               path: "{{ argocd_app_path }}"
               kustomize:
                 components:
-                  - https://github.com/openstack-gitops/rhoso-gitops/components/argocd/annotations
+                  -  https://github.com/openstack-gitops/rhoso-gitops/base/initialize/gitops/components/annotations?ref=main
             destination:
               server: https://kubernetes.default.svc
               namespace: "{{ _argocd_app_namespace }}"
