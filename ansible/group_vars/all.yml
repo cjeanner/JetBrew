@@ -1,0 +1,48 @@
+cloud: cjt_test
+lab: scalelab #scalelab/performancelab
+dt_path: /home/zuul/scalelab/architecture
+compute_count: 1
+
+# Baremetal node login and key details
+ssh_password: fooBar
+ssh_username: zuul
+ssh_key_file: ~/.ssh/id_cifw #don't add .pub
+
+# Nova migration key
+nova_migration_key: ~/.ssh/nova_migration
+
+#controlplane allocation start ip (should be same in the nncp values)
+ctlplane_start_ip: 172.16.20.100
+
+#set the kubeconfig path
+ocp_environment:
+  KUBECONFIG: /home/zuul/.kube/config
+
+# Optional: Local path to OCP inventory file
+# If specified and file exists, it will be used instead of downloading from lab
+ocp_inventory_local_path: /home/zuul/jetbrew/custom-scale-inventory.json
+
+# Enable telemetry (default: true)
+telemetry: true
+
+# External ceph deploy vars
+ceph_node_count: 3
+ansible_ssh_password: "{{ ssh_password }}"
+
+rhos_release_rpm: 
+ceph_version: "7.1"
+
+# Registry credentials used by external ceph
+registry_url: "registry.redhat.io"
+registry_username:
+registry_password:
+
+
+
+# Ceph backend integration
+# NOTE: This has to be used only after deploying external ceph via deploy_external_ceph.yaml
+ceph_backend: false
+ceph_admin_node: #hostname/ip
+ceph_admin_user: root
+ceph_admin_password: "{{ ansible_ssh_password }}"
+ceph_config_local_path: /root/ceph-config
